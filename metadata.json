@@ -1,0 +1,6 @@
+{
+  "name": "ระบบติดตามงานสรุปรวมผลตรวจสุขภาพองค์กร",
+  "description": "ระบบบันทึกและสถิติประเมินความคืบหน้ารายบุคคล พร้อม Dashboard การจัดการตรวจสุขภาพสำหรับสระทีมงาน สัญญาค้าง และประสิทธิภาพรายคน",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
