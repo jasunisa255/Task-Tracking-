@@ -138,6 +138,32 @@ export default function App() {
     return null;
   });
 
+  // --- SYNCHRONIZATION AND CONFLICT RESOLUTION SYSTEM ---
+  const TASKS_TS_KEY = "health_checkup_tracker_tasks_ts_v2";
+  const SALES_TS_KEY = "health_checkup_tracker_sales_ts_v2";
+  const ASSIGNEES_TS_KEY = "health_checkup_tracker_assignees_ts_v2";
+  const USERS_TS_KEY = "health_checkup_tracker_users_ts_v2";
+
+  const getLocalTimestamp = (key: string) => {
+    const ts = localStorage.getItem(key);
+    if (ts) return Number(ts);
+    // If we have saved data locally from a previous session, default to a high baseline (so it overrides any fresh container template 0-timestamp)
+    if (key === TASKS_TS_KEY && localStorage.getItem(STORAGE_KEY)) return 1718000000000;
+    if (key === SALES_TS_KEY && localStorage.getItem(SALES_STORAGE_KEY)) return 1718000000000;
+    if (key === ASSIGNEES_TS_KEY && localStorage.getItem("health_checkup_tracker_assignees_v1")) return 1718000000000;
+    if (key === USERS_TS_KEY && localStorage.getItem("health_checkup_tracker_users_v1")) return 1718000000000;
+    return 0;
+  };
+
+  const setLocalTimestamp = (key: string, val: number) => {
+    localStorage.setItem(key, String(val));
+  };
+
+  const lastSyncedTasksRef = useRef<string>("");
+  const lastSyncedUsersRef = useRef<string>("");
+  const lastSyncedAssigneesRef = useRef<string>("");
+  const lastSyncedSalesRef = useRef<string>("");
+
   // Dynamic Login Accounts / Users - "ไม่ต้องโชว์ชื่อตรงหน้าแรก ให้admin จัดการเพิ่มลบได้เอง"
   const [usersList, setUsersList] = useState<{name: string, email: string, password: string, role: "admin" | "user"}[]>(() => {
     const saved = localStorage.getItem("health_checkup_tracker_users_v1");
@@ -174,7 +200,16 @@ export default function App() {
 
   // Sync users list to localStorage and Server
   useEffect(() => {
-    localStorage.setItem("health_checkup_tracker_users_v1", JSON.stringify(usersList));
+    const currentStr = JSON.stringify(usersList);
+    localStorage.setItem("health_checkup_tracker_users_v1", currentStr);
+    if (lastSyncedUsersRef.current && currentStr === lastSyncedUsersRef.current) {
+      return;
+    }
+    // Changed locally, so bump timestamp and save
+    lastSyncedUsersRef.current = currentStr;
+    const now = Date.now();
+    setLocalTimestamp(USERS_TS_KEY, now);
+
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -207,7 +242,16 @@ export default function App() {
 
   // Sync assignees list to localStorage and Server
   useEffect(() => {
-    localStorage.setItem("health_checkup_tracker_assignees_v1", JSON.stringify(assigneesList));
+    const currentStr = JSON.stringify(assigneesList);
+    localStorage.setItem("health_checkup_tracker_assignees_v1", currentStr);
+    if (lastSyncedAssigneesRef.current && currentStr === lastSyncedAssigneesRef.current) {
+      return;
+    }
+    // Changed locally, so bump timestamp and save
+    lastSyncedAssigneesRef.current = currentStr;
+    const now = Date.now();
+    setLocalTimestamp(ASSIGNEES_TS_KEY, now);
+
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -331,13 +375,30 @@ export default function App() {
 
   // Sync sales list changes and Server
   useEffect(() => {
-    localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(salesList));
+    const currentStr = JSON.stringify(salesList);
+    localStorage.setItem(SALES_STORAGE_KEY, currentStr);
+    if (lastSyncedSalesRef.current && currentStr === lastSyncedSalesRef.current) {
+      return;
+    }
+    // Changed locally, so bump timestamp and save
+    lastSyncedSalesRef.current = currentStr;
+    const now = Date.now();
+    setLocalTimestamp(SALES_TS_KEY, now);
+
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ salesList })
     }).catch(err => console.error("Error saving salesList to server:", err));
   }, [salesList]);
+
+  // Track initial mount after states are fully in scope to avoid redundant writes
+  useEffect(() => {
+    lastSyncedTasksRef.current = JSON.stringify(tasks);
+    lastSyncedUsersRef.current = JSON.stringify(usersList);
+    lastSyncedAssigneesRef.current = JSON.stringify(assigneesList);
+    lastSyncedSalesRef.current = JSON.stringify(salesList);
+  }, []);
 
   // Sales Manage Modal State
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
@@ -441,103 +502,152 @@ export default function App() {
 
   const isFirstFetchRef = useRef(true);
 
-  // Helper to retrieve and merge state from server
+  // Helper to retrieve and merge state from server with bidirectional sync
   const fetchAllDataFromServer = async (silent = false) => {
     try {
-      const res = await fetch("/api/all-data");
+      // 1. Gather our local timestamps
+      const clientTimestamps = {
+        tasks: getLocalTimestamp(TASKS_TS_KEY),
+        usersList: getLocalTimestamp(USERS_TS_KEY),
+        assigneesList: getLocalTimestamp(ASSIGNEES_TS_KEY),
+        salesList: getLocalTimestamp(SALES_TS_KEY)
+      };
+
+      // 2. Prepare client data payload
+      const clientData = {
+        tasks: tasks,
+        usersList: usersList,
+        assigneesList: assigneesList,
+        salesList: salesList
+      };
+
+      // 3. POST to /api/sync
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientTimestamps, clientData })
+      });
+
       if (res.ok) {
-        const data = await res.json();
-        if (data) {
+        const body = await res.json();
+        if (body && body.timestamps && body.data) {
+          const sTimestamps = body.timestamps;
+          const sData = body.data;
+
           const isFirstFetch = isFirstFetchRef.current;
           if (isFirstFetch) {
             isFirstFetchRef.current = false;
           }
 
-          if (data.tasks) {
-            setTasks(prev => {
+          // Merge or update tasks
+          if (sData.tasks) {
+            const sTs = Number(sTimestamps.tasks) || 0;
+            const cTs = clientTimestamps.tasks;
+
+            let finalTasks = tasks;
+            if (sTs > cTs || isFirstFetch) {
               if (isFirstFetch) {
-                // Merge local tasks (prev) and server tasks (data.tasks)
-                // If the server restarted and reset to initial tasks (which has fewer tasks or defaults),
-                // we merge local-scoped database modifications to ensure we don't lose any records.
+                // Bi-directional merge of missing records on first boot
                 const mergedMap = new Map<string, WorkTask>();
-                data.tasks.forEach((t: WorkTask) => {
-                  if (t?.id) mergedMap.set(t.id, t);
-                });
-                prev.forEach((t: WorkTask) => {
-                  if (t?.id) mergedMap.set(t.id, t);
-                });
-                return Array.from(mergedMap.values());
+                sData.tasks.forEach((t: WorkTask) => { if (t?.id) mergedMap.set(t.id, t); });
+                tasks.forEach((t: WorkTask) => { if (t?.id) mergedMap.set(t.id, t); });
+                finalTasks = Array.from(mergedMap.values());
               } else {
-                if (JSON.stringify(prev) !== JSON.stringify(data.tasks)) {
-                  return data.tasks;
-                }
-                return prev;
+                finalTasks = sData.tasks;
               }
-            });
+
+              // Update React state, memory ref and localStorage
+              const finalStr = JSON.stringify(finalTasks);
+              lastSyncedTasksRef.current = finalStr;
+              setTasks(finalTasks);
+              localStorage.setItem(STORAGE_KEY, finalStr);
+              setLocalTimestamp(TASKS_TS_KEY, Math.max(sTs, cTs));
+            }
           }
-          if (data.usersList) {
-            setUsersList(prev => {
+
+          // Merge or update usersList
+          if (sData.usersList) {
+            const sTs = Number(sTimestamps.usersList) || 0;
+            const cTs = clientTimestamps.usersList;
+
+            let finalUsers = usersList;
+            if (sTs > cTs || isFirstFetch) {
               if (isFirstFetch) {
-                // Merge users by email (case-insensitive) to prevent custom added users being deleted on server restarts
                 const mergedMap = new Map<string, any>();
-                data.usersList.forEach((u: any) => {
-                  if (u?.email) mergedMap.set(u.email.toLowerCase(), u);
-                });
-                prev.forEach((u: any) => {
+                sData.usersList.forEach((u: any) => { if (u?.email) mergedMap.set(u.email.toLowerCase(), u); });
+                usersList.forEach((u: any) => {
                   if (u?.email) {
                     const emailLower = u.email.toLowerCase();
                     const existing = mergedMap.get(emailLower);
-                    if (!existing) {
-                      mergedMap.set(emailLower, u);
-                    } else {
-                      mergedMap.set(emailLower, { ...existing, ...u });
-                    }
+                    if (!existing) mergedMap.set(emailLower, u);
+                    else mergedMap.set(emailLower, { ...existing, ...u });
                   }
                 });
-                return Array.from(mergedMap.values());
+                finalUsers = Array.from(mergedMap.values());
               } else {
-                if (JSON.stringify(prev) !== JSON.stringify(data.usersList)) {
-                  return data.usersList;
-                }
-                return prev;
+                finalUsers = sData.usersList;
               }
-            });
+
+              const finalStr = JSON.stringify(finalUsers);
+              lastSyncedUsersRef.current = finalStr;
+              setUsersList(finalUsers);
+              localStorage.setItem("health_checkup_tracker_users_v1", finalStr);
+              setLocalTimestamp(USERS_TS_KEY, Math.max(sTs, cTs));
+            }
           }
-          if (data.assigneesList) {
-            setAssigneesList(prev => {
+
+          // Merge or update assigneesList
+          if (sData.assigneesList) {
+            const sTs = Number(sTimestamps.assigneesList) || 0;
+            const cTs = clientTimestamps.assigneesList;
+
+            let finalAssignees = assigneesList;
+            if (sTs > cTs || isFirstFetch) {
               if (isFirstFetch) {
                 const uniqueSet = new Set<string>();
-                data.assigneesList.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
-                prev.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
-                return Array.from(uniqueSet);
+                sData.assigneesList.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
+                assigneesList.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
+                finalAssignees = Array.from(uniqueSet);
               } else {
-                if (JSON.stringify(prev) !== JSON.stringify(data.assigneesList)) {
-                  return data.assigneesList;
-                }
-                return prev;
+                finalAssignees = sData.assigneesList;
               }
-            });
+
+              const finalStr = JSON.stringify(finalAssignees);
+              lastSyncedAssigneesRef.current = finalStr;
+              setAssigneesList(finalAssignees);
+              localStorage.setItem("health_checkup_tracker_assignees_v1", finalStr);
+              setLocalTimestamp(ASSIGNEES_TS_KEY, Math.max(sTs, cTs));
+            }
           }
-          if (data.salesList) {
-            setSalesList(prev => {
+
+          // Merge or update salesList
+          if (sData.salesList) {
+            const sTs = Number(sTimestamps.salesList) || 0;
+            const cTs = clientTimestamps.salesList;
+
+            let finalSales = salesList;
+            if (sTs > cTs || isFirstFetch) {
               if (isFirstFetch) {
                 const uniqueSet = new Set<string>();
-                data.salesList.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
-                prev.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
-                return Array.from(uniqueSet);
+                sData.salesList.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
+                salesList.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
+                finalSales = Array.from(uniqueSet);
               } else {
-                if (JSON.stringify(prev) !== JSON.stringify(data.salesList)) {
-                  return data.salesList;
-                }
-                return prev;
+                finalSales = sData.salesList;
               }
-            });
+
+              const finalStr = JSON.stringify(finalSales);
+              lastSyncedSalesRef.current = finalStr;
+              setSalesList(finalSales);
+              localStorage.setItem(SALES_STORAGE_KEY, finalStr);
+              setLocalTimestamp(SALES_TS_KEY, Math.max(sTs, cTs));
+            }
           }
         }
       }
     } catch (e) {
       if (!silent) {
-        console.error("Failed to fetch all data from server", e);
+        console.error("Failed to sync data with server", e);
       }
     }
   };
@@ -555,7 +665,16 @@ export default function App() {
 
   // --- PERSISTENCE ---
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    const currentStr = JSON.stringify(tasks);
+    localStorage.setItem(STORAGE_KEY, currentStr);
+    if (lastSyncedTasksRef.current && currentStr === lastSyncedTasksRef.current) {
+      return;
+    }
+    // Changed locally, so bump timestamp and save
+    lastSyncedTasksRef.current = currentStr;
+    const now = Date.now();
+    setLocalTimestamp(TASKS_TS_KEY, now);
+
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

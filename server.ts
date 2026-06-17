@@ -64,33 +64,93 @@ async function startServer() {
     salesList: readJson(SALES_PATH, DEFAULT_SALES)
   };
 
+  // Timestamps for bi-directional synchronization
+  const TIMESTAMPS_PATH = path.join(DATA_DIR, "timestamps.json");
+  const DEFAULT_TIMESTAMPS = {
+    tasks: 0,
+    usersList: 0,
+    assigneesList: 0,
+    salesList: 0
+  };
+  const serverTimestamps = readJson(TIMESTAMPS_PATH, DEFAULT_TIMESTAMPS);
+
   // --- API ROUTE: GET ALL STATE ---
   app.get("/api/all-data", (req, res) => {
     res.json(state);
   });
 
-  // --- API ROUTE: SAVE ALL STATE (Partial Support) ---
+  // --- API ROUTE: SAVE ALL STATE (Legacy Support with Timestamp bumping) ---
   app.post("/api/save-all", (req, res) => {
     const { tasks, usersList, assigneesList, salesList } = req.body;
+    let updated = false;
     
     if (tasks !== undefined) {
       state.tasks = tasks;
       writeJson(TASKS_PATH, tasks);
+      serverTimestamps.tasks = Date.now();
+      updated = true;
     }
     if (usersList !== undefined) {
       state.usersList = usersList;
       writeJson(USERS_PATH, usersList);
+      serverTimestamps.usersList = Date.now();
+      updated = true;
     }
     if (assigneesList !== undefined) {
       state.assigneesList = assigneesList;
       writeJson(ASSIGNEES_PATH, assigneesList);
+      serverTimestamps.assigneesList = Date.now();
+      updated = true;
     }
     if (salesList !== undefined) {
       state.salesList = salesList;
       writeJson(SALES_PATH, salesList);
+      serverTimestamps.salesList = Date.now();
+      updated = true;
+    }
+
+    if (updated) {
+      writeJson(TIMESTAMPS_PATH, serverTimestamps);
     }
     
-    res.json({ success: true, data: state });
+    res.json({ success: true, data: state, timestamps: serverTimestamps });
+  });
+
+  // --- API ROUTE: BI-DIRECTIONAL REAL-TIME CONFLICT-FREE SYNC ---
+  app.post("/api/sync", (req, res) => {
+    const { clientTimestamps, clientData } = req.body;
+    let writeNeeded = false;
+
+    const collections = ["tasks", "usersList", "assigneesList", "salesList"] as const;
+    const paths = {
+      tasks: TASKS_PATH,
+      usersList: USERS_PATH,
+      assigneesList: ASSIGNEES_PATH,
+      salesList: SALES_PATH
+    };
+
+    collections.forEach((col) => {
+      const cTs = clientTimestamps?.[col] ? Number(clientTimestamps[col]) : 0;
+      const sTs = serverTimestamps[col] ? Number(serverTimestamps[col]) : 0;
+
+      if (cTs > sTs && clientData?.[col] !== undefined) {
+        // Client data is newer, update server state and write file
+        state[col] = clientData[col];
+        serverTimestamps[col] = cTs;
+        writeJson(paths[col], clientData[col]);
+        writeNeeded = true;
+      }
+    });
+
+    if (writeNeeded) {
+      writeJson(TIMESTAMPS_PATH, serverTimestamps);
+    }
+
+    res.json({
+      success: true,
+      timestamps: serverTimestamps,
+      data: state
+    });
   });
 
   // Serve compiled assets in production or use Vite dev server in development
