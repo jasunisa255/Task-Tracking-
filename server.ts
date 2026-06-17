@@ -48,12 +48,12 @@ async function startServer() {
 
   // Default values
   const DEFAULT_USERS = [
-    { name: "สุนิสสา", email: "sunissa@gmail.com", password: "Ammy", role: "admin" },
-    { name: "รวีวรรณ", email: "raveewan@gmail.com", password: "Pumpuy", role: "user" },
-    { name: "อาทิตยา", email: "athittaya@gmail.com", password: "Taiwan", role: "user" },
-    { name: "สุนิษา", email: "ja.sunisa255@gmail.com", password: "Ja", role: "admin" }
+    { name: "Ammy", email: "sunissa@gmail.com", password: "Ammy", role: "admin" },
+    { name: "ปุ้ม", email: "raveewan@gmail.com", password: "Pumpuy", role: "user" },
+    { name: "ตะวัน", email: "athittaya@gmail.com", password: "Taiwan", role: "user" },
+    { name: "จ๋า", email: "ja.sunisa255@gmail.com", password: "Ja", role: "admin" }
   ];
-  const DEFAULT_ASSIGNEES = ["สุนิสสา", "อาทิตยา", "รวีวรรณ", "สุนิษา"];
+  const DEFAULT_ASSIGNEES = ["Ammy", "ตะวัน", "ปุ้ม", "จ๋า"];
   const DEFAULT_SALES = ["รุ่งทิวา", "นัทชา", "พนัทดา", "ธิดาวัลย์", "สิริอาภา"];
 
   // Load and cache state

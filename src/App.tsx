@@ -439,6 +439,8 @@ export default function App() {
   // Toast System for user feedback
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "warning" } | null>(null);
 
+  const isFirstFetchRef = useRef(true);
+
   // Helper to retrieve and merge state from server
   const fetchAllDataFromServer = async (silent = false) => {
     try {
@@ -446,36 +448,89 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data) {
+          const isFirstFetch = isFirstFetchRef.current;
+          if (isFirstFetch) {
+            isFirstFetchRef.current = false;
+          }
+
           if (data.tasks) {
             setTasks(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.tasks)) {
-                return data.tasks;
+              if (isFirstFetch) {
+                // Merge local tasks (prev) and server tasks (data.tasks)
+                // If the server restarted and reset to initial tasks (which has fewer tasks or defaults),
+                // we merge local-scoped database modifications to ensure we don't lose any records.
+                const mergedMap = new Map<string, WorkTask>();
+                data.tasks.forEach((t: WorkTask) => {
+                  if (t?.id) mergedMap.set(t.id, t);
+                });
+                prev.forEach((t: WorkTask) => {
+                  if (t?.id) mergedMap.set(t.id, t);
+                });
+                return Array.from(mergedMap.values());
+              } else {
+                if (JSON.stringify(prev) !== JSON.stringify(data.tasks)) {
+                  return data.tasks;
+                }
+                return prev;
               }
-              return prev;
             });
           }
           if (data.usersList) {
             setUsersList(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.usersList)) {
-                return data.usersList;
+              if (isFirstFetch) {
+                // Merge users by email (case-insensitive) to prevent custom added users being deleted on server restarts
+                const mergedMap = new Map<string, any>();
+                data.usersList.forEach((u: any) => {
+                  if (u?.email) mergedMap.set(u.email.toLowerCase(), u);
+                });
+                prev.forEach((u: any) => {
+                  if (u?.email) {
+                    const emailLower = u.email.toLowerCase();
+                    const existing = mergedMap.get(emailLower);
+                    if (!existing) {
+                      mergedMap.set(emailLower, u);
+                    } else {
+                      mergedMap.set(emailLower, { ...existing, ...u });
+                    }
+                  }
+                });
+                return Array.from(mergedMap.values());
+              } else {
+                if (JSON.stringify(prev) !== JSON.stringify(data.usersList)) {
+                  return data.usersList;
+                }
+                return prev;
               }
-              return prev;
             });
           }
           if (data.assigneesList) {
             setAssigneesList(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.assigneesList)) {
-                return data.assigneesList;
+              if (isFirstFetch) {
+                const uniqueSet = new Set<string>();
+                data.assigneesList.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
+                prev.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
+                return Array.from(uniqueSet);
+              } else {
+                if (JSON.stringify(prev) !== JSON.stringify(data.assigneesList)) {
+                  return data.assigneesList;
+                }
+                return prev;
               }
-              return prev;
             });
           }
           if (data.salesList) {
             setSalesList(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.salesList)) {
-                return data.salesList;
+              if (isFirstFetch) {
+                const uniqueSet = new Set<string>();
+                data.salesList.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
+                prev.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
+                return Array.from(uniqueSet);
+              } else {
+                if (JSON.stringify(prev) !== JSON.stringify(data.salesList)) {
+                  return data.salesList;
+                }
+                return prev;
               }
-              return prev;
             });
           }
         }
