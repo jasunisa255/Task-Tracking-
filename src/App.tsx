@@ -126,7 +126,7 @@ export default function App() {
         // Make sure it has a role property (migration)
         if (parsed && typeof parsed === "object") {
           const email = (parsed.email || "").toLowerCase();
-          const role = parsed.role || (email.includes("sunissa") || email.includes("sunisa") ? "admin" : "user");
+          const role = parsed.role || (email === "sunissa@gmail.com" || email === "ja.sunisa255@gmail.com" ? "admin" : "user");
           return {
             email: parsed.email || "",
             name: parsed.name || "",
@@ -165,6 +165,7 @@ export default function App() {
   const lastSyncedUsersRef = useRef<string>("");
   const lastSyncedAssigneesRef = useRef<string>("");
   const lastSyncedSalesRef = useRef<string>("");
+  const isSavingRef = useRef<boolean>(false);
 
   // Dynamic Login Accounts / Users - "ไม่ต้องโชว์ชื่อตรงหน้าแรก ให้admin จัดการเพิ่มลบได้เอง"
   const [usersList, setUsersList] = useState<{name: string, email: string, password: string, role: "admin" | "user"}[]>(() => {
@@ -176,15 +177,15 @@ export default function App() {
           return parsed.map((usr: any) => {
             const email = (usr.email || "").toLowerCase();
             let name = usr.name || "";
-            if (name === "สุนิสสา") name = "Ammy";
-            else if (name === "อาทิตยา") name = "ตะวัน";
-            else if (name === "รวีวรรณ") name = "ปุ้ม";
-            else if (name === "สุนิษา") name = "จ๋า";
+            if (email === "sunissa@gmail.com") name = "Ammy";
+            else if (email === "athittaya@gmail.com") name = "ตะวัน";
+            else if (email === "raveewan@gmail.com") name = "ปุ้ม";
+            else if (email === "ja.sunisa255@gmail.com") name = "จ๋า";
             return {
               name,
               email: usr.email || "",
               password: usr.password || "",
-              role: usr.role || (email.includes("sunissa") || email.includes("sunisa") ? "admin" : "user")
+              role: usr.role || (email === "sunissa@gmail.com" || email === "ja.sunisa255@gmail.com" ? "admin" : "user")
             };
           });
         }
@@ -212,11 +213,25 @@ export default function App() {
     const now = Date.now();
     setLocalTimestamp(USERS_TS_KEY, now);
 
+    isSavingRef.current = true;
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ usersList })
-    }).catch(err => console.error("Error saving usersList to server:", err));
+    })
+    .then(async (res) => {
+      if (res.ok) {
+        const body = await res.json();
+        if (body && body.timestamps) {
+          const sTs = Number(body.timestamps.usersList) || Date.now();
+          setLocalTimestamp(USERS_TS_KEY, sTs);
+        }
+      }
+    })
+    .catch(err => console.error("Error saving usersList to server:", err))
+    .finally(() => {
+      isSavingRef.current = false;
+    });
   }, [usersList]);
 
   // Dynamic Assignees list - "ชื่อผู้รับผิดชอบสามารถเพิ่มหรือลบเองได้"
@@ -226,14 +241,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((name: string) => {
-            const trimmed = name.trim();
-            if (trimmed === "สุนิสสา") return "Ammy";
-            if (trimmed === "อาทิตยา") return "ตะวัน";
-            if (trimmed === "รวีวรรณ") return "ปุ้ม";
-            if (trimmed === "สุนิษา") return "จ๋า";
-            return trimmed;
-          });
+          return parsed.map((name: string) => name.trim());
         }
       } catch (e) {
         console.error("Failed to parse assigneesList", e);
@@ -254,11 +262,25 @@ export default function App() {
     const now = Date.now();
     setLocalTimestamp(ASSIGNEES_TS_KEY, now);
 
+    isSavingRef.current = true;
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ assigneesList })
-    }).catch(err => console.error("Error saving assigneesList to server:", err));
+    })
+    .then(async (res) => {
+      if (res.ok) {
+        const body = await res.json();
+        if (body && body.timestamps) {
+          const sTs = Number(body.timestamps.assigneesList) || Date.now();
+          setLocalTimestamp(ASSIGNEES_TS_KEY, sTs);
+        }
+      }
+    })
+    .catch(err => console.error("Error saving assigneesList to server:", err))
+    .finally(() => {
+      isSavingRef.current = false;
+    });
   }, [assigneesList]);
 
   const [loginEmail, setLoginEmail] = useState("");
@@ -387,11 +409,25 @@ export default function App() {
     const now = Date.now();
     setLocalTimestamp(SALES_TS_KEY, now);
 
+    isSavingRef.current = true;
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ salesList })
-    }).catch(err => console.error("Error saving salesList to server:", err));
+    })
+    .then(async (res) => {
+      if (res.ok) {
+        const body = await res.json();
+        if (body && body.timestamps) {
+          const sTs = Number(body.timestamps.salesList) || Date.now();
+          setLocalTimestamp(SALES_TS_KEY, sTs);
+        }
+      }
+    })
+    .catch(err => console.error("Error saving salesList to server:", err))
+    .finally(() => {
+      isSavingRef.current = false;
+    });
   }, [salesList]);
 
   // Track initial mount after states are fully in scope to avoid redundant writes
@@ -506,6 +542,9 @@ export default function App() {
 
   // Helper to retrieve and merge state from server with bidirectional sync
   const fetchAllDataFromServer = async (silent = false) => {
+    if (isSavingRef.current && !isFirstFetchRef.current) {
+      return;
+    }
     try {
       // 1. Gather our local timestamps
       const clientTimestamps = {
@@ -685,11 +724,25 @@ export default function App() {
     const now = Date.now();
     setLocalTimestamp(TASKS_TS_KEY, now);
 
+    isSavingRef.current = true;
     fetch("/api/save-all", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tasks })
-    }).catch(err => console.error("Error saving tasks to server:", err));
+    })
+    .then(async (res) => {
+      if (res.ok) {
+        const body = await res.json();
+        if (body && body.timestamps) {
+          const sTs = Number(body.timestamps.tasks) || Date.now();
+          setLocalTimestamp(TASKS_TS_KEY, sTs);
+        }
+      }
+    })
+    .catch(err => console.error("Error saving tasks to server:", err))
+    .finally(() => {
+      isSavingRef.current = false;
+    });
   }, [tasks]);
 
   const showToast = (message: string, type: "success" | "info" | "warning" = "success") => {
