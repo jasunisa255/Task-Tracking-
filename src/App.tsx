@@ -546,19 +546,21 @@ export default function App() {
 
             let finalTasks = tasks;
             if (sTs > cTs || isFirstFetch) {
+              let changedFromServer = false;
               if (isFirstFetch) {
                 // Bi-directional merge of missing records on first boot
                 const mergedMap = new Map<string, WorkTask>();
                 sData.tasks.forEach((t: WorkTask) => { if (t?.id) mergedMap.set(t.id, t); });
                 tasks.forEach((t: WorkTask) => { if (t?.id) mergedMap.set(t.id, t); });
                 finalTasks = Array.from(mergedMap.values());
+                changedFromServer = JSON.stringify(finalTasks) !== JSON.stringify(sData.tasks);
               } else {
                 finalTasks = sData.tasks;
               }
 
               // Update React state, memory ref and localStorage
               const finalStr = JSON.stringify(finalTasks);
-              lastSyncedTasksRef.current = finalStr;
+              lastSyncedTasksRef.current = (isFirstFetch && changedFromServer) ? "" : finalStr;
               setTasks(finalTasks);
               localStorage.setItem(STORAGE_KEY, finalStr);
               setLocalTimestamp(TASKS_TS_KEY, Math.max(sTs, cTs));
@@ -572,6 +574,7 @@ export default function App() {
 
             let finalUsers = usersList;
             if (sTs > cTs || isFirstFetch) {
+              let changedFromServer = false;
               if (isFirstFetch) {
                 const mergedMap = new Map<string, any>();
                 sData.usersList.forEach((u: any) => { if (u?.email) mergedMap.set(u.email.toLowerCase(), u); });
@@ -584,12 +587,13 @@ export default function App() {
                   }
                 });
                 finalUsers = Array.from(mergedMap.values());
+                changedFromServer = JSON.stringify(finalUsers) !== JSON.stringify(sData.usersList);
               } else {
                 finalUsers = sData.usersList;
               }
 
               const finalStr = JSON.stringify(finalUsers);
-              lastSyncedUsersRef.current = finalStr;
+              lastSyncedUsersRef.current = (isFirstFetch && changedFromServer) ? "" : finalStr;
               setUsersList(finalUsers);
               localStorage.setItem("health_checkup_tracker_users_v1", finalStr);
               setLocalTimestamp(USERS_TS_KEY, Math.max(sTs, cTs));
@@ -603,17 +607,19 @@ export default function App() {
 
             let finalAssignees = assigneesList;
             if (sTs > cTs || isFirstFetch) {
+              let changedFromServer = false;
               if (isFirstFetch) {
                 const uniqueSet = new Set<string>();
                 sData.assigneesList.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
                 assigneesList.forEach((a: string) => { if (a && a.trim()) uniqueSet.add(a.trim()); });
                 finalAssignees = Array.from(uniqueSet);
+                changedFromServer = JSON.stringify(finalAssignees) !== JSON.stringify(sData.assigneesList);
               } else {
                 finalAssignees = sData.assigneesList;
               }
 
               const finalStr = JSON.stringify(finalAssignees);
-              lastSyncedAssigneesRef.current = finalStr;
+              lastSyncedAssigneesRef.current = (isFirstFetch && changedFromServer) ? "" : finalStr;
               setAssigneesList(finalAssignees);
               localStorage.setItem("health_checkup_tracker_assignees_v1", finalStr);
               setLocalTimestamp(ASSIGNEES_TS_KEY, Math.max(sTs, cTs));
@@ -627,17 +633,19 @@ export default function App() {
 
             let finalSales = salesList;
             if (sTs > cTs || isFirstFetch) {
+              let changedFromServer = false;
               if (isFirstFetch) {
                 const uniqueSet = new Set<string>();
                 sData.salesList.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
                 salesList.forEach((s: string) => { if (s && s.trim()) uniqueSet.add(s.trim()); });
                 finalSales = Array.from(uniqueSet);
+                changedFromServer = JSON.stringify(finalSales) !== JSON.stringify(sData.salesList);
               } else {
                 finalSales = sData.salesList;
               }
 
               const finalStr = JSON.stringify(finalSales);
-              lastSyncedSalesRef.current = finalStr;
+              lastSyncedSalesRef.current = (isFirstFetch && changedFromServer) ? "" : finalStr;
               setSalesList(finalSales);
               localStorage.setItem(SALES_STORAGE_KEY, finalStr);
               setLocalTimestamp(SALES_TS_KEY, Math.max(sTs, cTs));
