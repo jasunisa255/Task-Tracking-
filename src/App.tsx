@@ -2073,17 +2073,6 @@ export default function App() {
     showToast(`นำเข้าข้อมูลงานจำนวน ${newTasksToAppend.length} รายการสำเร็จ!`, "success");
   };
 
-  const handleResetToDemo = () => {
-    if (confirm("คุณต้องการล้างข้อมูลปัจจุบันเพื่อดาวน์โหลดชุดข้อมูลตัวอย่างตรวจสุขภาพดั้งเดิมใช่หรือไม่?")) {
-      setTasks(INITIAL_TASKS);
-      setMetricFilter("all");
-      setSearchQuery("");
-      setFilterAssignee("all");
-      setFilterStatus("all");
-      showToast("รีเซ็ตเป็นข้อมูลตัวอย่างเรียบร้อยแล้ว", "success");
-    }
-  };
-
   // Handle Sort
   const handleSort = (field: keyof WorkTask) => {
     if (sortBy === field) {
