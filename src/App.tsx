@@ -67,6 +67,8 @@ import {
   STATUS_OPTIONS,
   INITIAL_TASKS
 } from "./types";
+// @ts-ignore
+import phyathaiLogo from "./assets/images/phyathai2_logo_1781666038861.jpg";
 
 const MONTHS_THAI = [
   { value: "01", label: "มกราคม (Jan)" },
@@ -2146,8 +2148,13 @@ export default function App() {
 
           {/* Header Title */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white font-extrabold text-2xl shadow-lg border border-blue-500 mb-2">
-              T
+            <div className="flex justify-center mb-3">
+              <img
+                src={phyathaiLogo}
+                alt="Phyathai 2 Hospital Logo"
+                className="h-16 w-auto object-contain rounded-xl bg-white p-1.5 shadow-md border border-slate-700/20"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <h1 className="text-lg font-bold tracking-tight uppercase font-display text-white">
               Work Tracking & Performance
@@ -2255,9 +2262,12 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white shrink-0 shadow-sm font-display font-bold text-lg">
-                T
-              </div>
+              <img
+                src={phyathaiLogo}
+                alt="Phyathai 2 Hospital Logo"
+                className="h-10 w-auto object-contain rounded bg-white p-0.5 shrink-0 shadow-sm"
+                referrerPolicy="no-referrer"
+              />
               <div>
                 <h1 className="text-sm sm:text-base font-display font-semibold tracking-tight text-white uppercase flex items-center gap-2">
                   Work Tracking & Performance System
