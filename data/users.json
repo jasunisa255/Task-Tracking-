@@ -1,0 +1,32 @@
+[
+  {
+    "name": "จ๋า",
+    "email": "ja.sunisa255@gmail.com",
+    "password": "Ja",
+    "role": "admin"
+  },
+  {
+    "name": "อาทิตยา",
+    "email": "artitaya_sup@phyathai.com",
+    "password": "541659",
+    "role": "user"
+  },
+  {
+    "name": "รวีวรรณ",
+    "email": "raveewan_wia@phyathai.com",
+    "password": "552801",
+    "role": "user"
+  },
+  {
+    "name": "สุนิสสา",
+    "email": "sunissa_usa@phyathai.com",
+    "password": "720925",
+    "role": "user"
+  },
+  {
+    "name": "สุนิษา",
+    "email": "sunisa_sud@phyathai.com",
+    "password": "534002",
+    "role": "user"
+  }
+]

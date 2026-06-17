@@ -33,7 +33,6 @@ import {
   Info,
   ChevronRight,
   TrendingDown,
-  RefreshCw,
   Building2,
   CheckCircle2,
   Percent,
@@ -126,7 +125,7 @@ export default function App() {
         // Make sure it has a role property (migration)
         if (parsed && typeof parsed === "object") {
           const email = (parsed.email || "").toLowerCase();
-          const role = parsed.role || (email === "sunissa@gmail.com" || email === "ja.sunisa255@gmail.com" ? "admin" : "user");
+          const role = parsed.role || (email === "ja.sunisa255@gmail.com" ? "admin" : "user");
           return {
             email: parsed.email || "",
             name: parsed.name || "",
@@ -169,42 +168,51 @@ export default function App() {
 
   // Dynamic Login Accounts / Users - "ไม่ต้องโชว์ชื่อตรงหน้าแรก ให้admin จัดการเพิ่มลบได้เอง"
   const [usersList, setUsersList] = useState<{name: string, email: string, password: string, role: "admin" | "user"}[]>(() => {
+    const defaultUsers = [
+      { name: "จ๋า", email: "ja.sunisa255@gmail.com", password: "Ja", role: "admin" as const },
+      { name: "อาทิตยา", email: "artitaya_sup@phyathai.com", password: "541659", role: "user" as const },
+      { name: "รวีวรรณ", email: "raveewan_wia@phyathai.com", password: "552801", role: "user" as const },
+      { name: "สุนิสสา", email: "sunissa_usa@phyathai.com", password: "720925", role: "user" as const },
+      { name: "สุนิษา", email: "sunisa_sud@phyathai.com", password: "534002", role: "user" as const }
+    ];
+
     const saved = localStorage.getItem("health_checkup_tracker_users_v1");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((usr: any) => {
-            const email = (usr.email || "").toLowerCase();
-            let name = usr.name || "";
-            if (email === "sunissa@gmail.com") name = "Ammy";
-            else if (email === "athittaya@gmail.com") name = "ตะวัน";
-            else if (email === "raveewan@gmail.com") name = "ปุ้ม";
-            else if (email === "ja.sunisa255@gmail.com") name = "จ๋า";
-            return {
-              name,
-              email: usr.email || "",
-              password: usr.password || "",
-              role: usr.role || (email === "sunissa@gmail.com" || email === "ja.sunisa255@gmail.com" ? "admin" : "user")
-            };
+          const userMap = new Map<string, any>();
+          defaultUsers.forEach(u => userMap.set(u.email.toLowerCase(), u));
+          parsed.forEach((usr: any) => {
+            if (usr && usr.email) {
+              const emailLower = usr.email.toLowerCase();
+              if (!userMap.has(emailLower)) {
+                userMap.set(emailLower, {
+                  name: usr.name || "",
+                  email: usr.email || "",
+                  password: usr.password || "",
+                  role: usr.role || "user"
+                });
+              }
+            }
           });
+          return Array.from(userMap.values());
         }
       } catch (e) {
         console.error("Failed to parse usersList", e);
       }
     }
-    return [
-      { name: "Ammy", email: "sunissa@gmail.com", password: "Ammy", role: "admin" },
-      { name: "ปุ้ม", email: "raveewan@gmail.com", password: "Pumpuy", role: "user" },
-      { name: "ตะวัน", email: "athittaya@gmail.com", password: "Taiwan", role: "user" },
-      { name: "จ๋า", email: "ja.sunisa255@gmail.com", password: "Ja", role: "admin" }
-    ];
+    return defaultUsers;
   });
 
   // Sync users list to localStorage and Server
   useEffect(() => {
     const currentStr = JSON.stringify(usersList);
     localStorage.setItem("health_checkup_tracker_users_v1", currentStr);
+    if (isFirstFetchRef.current) {
+      lastSyncedUsersRef.current = currentStr;
+      return;
+    }
     if (lastSyncedUsersRef.current && currentStr === lastSyncedUsersRef.current) {
       return;
     }
@@ -236,24 +244,33 @@ export default function App() {
 
   // Dynamic Assignees list - "ชื่อผู้รับผิดชอบสามารถเพิ่มหรือลบเองได้"
   const [assigneesList, setAssigneesList] = useState<string[]>(() => {
+    const defaultAssignees = ["จ๋า", "อาทิตยา", "รวีวรรณ", "สุนิสสา", "สุนิษา"];
     const saved = localStorage.getItem("health_checkup_tracker_assignees_v1");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((name: string) => name.trim());
+          const uniqueSet = new Set(defaultAssignees);
+          parsed.forEach((name: string) => {
+            if (name && typeof name === "string") uniqueSet.add(name.trim());
+          });
+          return Array.from(uniqueSet);
         }
       } catch (e) {
         console.error("Failed to parse assigneesList", e);
       }
     }
-    return ["Ammy", "ตะวัน", "ปุ้ม", "จ๋า"];
+    return defaultAssignees;
   });
 
   // Sync assignees list to localStorage and Server
   useEffect(() => {
     const currentStr = JSON.stringify(assigneesList);
     localStorage.setItem("health_checkup_tracker_assignees_v1", currentStr);
+    if (isFirstFetchRef.current) {
+      lastSyncedAssigneesRef.current = currentStr;
+      return;
+    }
     if (lastSyncedAssigneesRef.current && currentStr === lastSyncedAssigneesRef.current) {
       return;
     }
@@ -401,6 +418,10 @@ export default function App() {
   useEffect(() => {
     const currentStr = JSON.stringify(salesList);
     localStorage.setItem(SALES_STORAGE_KEY, currentStr);
+    if (isFirstFetchRef.current) {
+      lastSyncedSalesRef.current = currentStr;
+      return;
+    }
     if (lastSyncedSalesRef.current && currentStr === lastSyncedSalesRef.current) {
       return;
     }
@@ -709,13 +730,29 @@ export default function App() {
       fetchAllDataFromServer(true);
     }, 5000);
 
-    return () => clearInterval(interval);
+    const handleFocusOrVisibility = () => {
+      // Trigger instant silent sync on tab focus or change of visibility (switching back to website)
+      fetchAllDataFromServer(true);
+    };
+
+    window.addEventListener("focus", handleFocusOrVisibility);
+    document.addEventListener("visibilitychange", handleFocusOrVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocusOrVisibility);
+      document.removeEventListener("visibilitychange", handleFocusOrVisibility);
+    };
   }, []);
 
   // --- PERSISTENCE ---
   useEffect(() => {
     const currentStr = JSON.stringify(tasks);
     localStorage.setItem(STORAGE_KEY, currentStr);
+    if (isFirstFetchRef.current) {
+      lastSyncedTasksRef.current = currentStr;
+      return;
+    }
     if (lastSyncedTasksRef.current && currentStr === lastSyncedTasksRef.current) {
       return;
     }
@@ -1770,18 +1807,21 @@ export default function App() {
         let assignee = rawAssignee.trim();
         const lowerAssignee = assignee.toLowerCase();
         if (assignee === "สุนิสสา" || lowerAssignee === "ammy") {
-          assignee = "Ammy";
+          assignee = "สุนิสสา";
         } else if (assignee === "อาทิตยา" || assignee === "ตะวัน") {
-          assignee = "ตะวัน";
+          assignee = "อาทิตยา";
         } else if (assignee === "รวีวรรณ" || assignee === "ปุ้ม") {
-          assignee = "ปุ้ม";
-        } else if (assignee === "สุนิษา" || assignee === "จ๋า") {
+          assignee = "รวีวรรณ";
+        } else if (assignee === "สุนิษา") {
+          assignee = "สุนิษา";
+        } else if (assignee === "จ๋า") {
           assignee = "จ๋า";
         } else if (assignee) {
-          if (assignee.includes("สุนิสสา") || lowerAssignee.includes("ammy")) assignee = "Ammy";
-          else if (assignee.includes("อาทิตยา") || assignee.includes("ตะวัน")) assignee = "ตะวัน";
-          else if (assignee.includes("รวีวรรณ") || assignee.includes("ปุ้ม")) assignee = "ปุ้ม";
-          else if (assignee.includes("สุนิษา") || assignee.includes("จ๋า")) assignee = "จ๋า";
+          if (assignee.includes("สุนิสสา") || lowerAssignee.includes("ammy")) assignee = "สุนิสสา";
+          else if (assignee.includes("อาทิตยา") || assignee.includes("ตะวัน")) assignee = "อาทิตยา";
+          else if (assignee.includes("รวีวรรณ") || assignee.includes("ปุ้ม")) assignee = "รวีวรรณ";
+          else if (assignee.includes("สุนิษา")) assignee = "สุนิษา";
+          else if (assignee.includes("จ๋า")) assignee = "จ๋า";
         }
         const sale = getCell(saleIdx) || "";
         
@@ -2342,13 +2382,6 @@ export default function App() {
                 title="ออกจากระบบบันทึกเวลาปัจจุบัน"
               >
                 ออกจากระบบ (Log Out)
-              </button>
-              <button
-                onClick={handleResetToDemo}
-                className="text-slate-400 hover:text-white transition-all p-1 hover:bg-slate-800 rounded border border-slate-700/40 cursor-pointer"
-                title="โหลดชุดข้อมูลตัวอย่างหากข้อมูลล้างออก"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
